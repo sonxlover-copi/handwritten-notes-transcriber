@@ -1,90 +1,93 @@
-# Local RAG Assistant
+# Расшифровка рукописных конспектов
 
-Локальный RAG-сервис для ответов по внутренней документации. FastAPI принимает вопрос, LangChain ищет релевантные фрагменты в Chroma, а Ollama генерирует ответ локальной LLM. Документы и модель не отправляются во внешние AI API.
+Локальное приложение, которое превращает фото или скан рукописного конспекта в редактируемый текст. Изображение отправляется локальной модели через Ollama. Приложение сохраняет разбиение по страницам и помечает сомнительные места вместо того, чтобы угадывать.
 
-## Что демонстрирует проект
+## Возможности первой версии
 
-- Python: REST API, CLI-индексация документов, настройки через переменные окружения.
-- Linux и Docker: запуск API и локальной модели через Docker Compose.
-- Локальные LLM и embeddings: Ollama (`qwen2.5:3b`, `nomic-embed-text`).
-- LangChain: text splitters, Ollama integrations, Chroma vector store.
-- RAG: загрузка Markdown/TXT, разбиение на чанки, векторный поиск, ответы с источниками.
+- Загрузка изображения (`.png`, `.jpg`, `.jpeg`, `.webp`) или PDF.
+- Распознавание страниц локальной vision-моделью Qwen3-VL.
+- Сохранение абзацев, заголовков, списков и формул в простом Markdown.
+- Метка `⟦неразборчиво⟧` для слов и частей формул, которые модель не смогла прочитать.
+- Просмотр результата и копирование текста в браузере.
+- HTTP API на FastAPI и интерактивная документация `/docs`.
 
-## Архитектура
+## Как работает
 
 ```text
-Markdown / TXT ──> ingest CLI ──> chunking ──> Ollama embeddings ──> Chroma
-                                                                       │
-Client ──HTTP──> FastAPI ──> retriever ────────────────────────────────┤
-                         └──> grounded prompt ──> Ollama chat model <──┘
+Фото / PDF → подготовка страниц в Python → локальная Qwen3-VL через Ollama → текст для проверки
 ```
 
-## Быстрый запуск (Linux + Docker Compose)
+Модель просят переписывать исходник дословно: не исправлять формулировки и не дополнять пропуски. Распознавание рукописного текста зависит от почерка и качества фотографии, поэтому результат нужно сверять с оригиналом.
 
-Нужны Docker Engine и Docker Compose plugin. Первый запуск скачает образы контейнеров и модели.
+## Запуск на Linux через Docker Compose
+
+Нужны Docker Engine и Docker Compose plugin. Команды ниже включают GPU через NVIDIA Container Toolkit. Если toolkit не установлен, уберите `-f compose.gpu.yaml`; Ollama будет считать на CPU, но медленнее.
+Для Qwen3-VL нужен Ollama версии 0.12.7 или новее.
 
 ```bash
 cp .env.example .env
-docker compose up -d ollama
-docker compose exec ollama ollama pull qwen2.5:3b
-docker compose exec ollama ollama pull nomic-embed-text
-docker compose up --build -d api
-docker compose run --rm api python -m app.ingest
+docker compose -f compose.yaml -f compose.gpu.yaml up -d ollama
+docker compose -f compose.yaml -f compose.gpu.yaml exec ollama ollama pull qwen3-vl:8b
+docker compose -f compose.yaml -f compose.gpu.yaml up --build -d app
 ```
 
-Проверить API:
+Откройте <http://localhost:8000>, загрузите фото или PDF. Первый запуск модели занимает время на скачивание; тег `qwen3-vl:8b` занимает около 6,2 ГБ по каталогу Ollama. [Каталог Qwen3-VL](https://ollama.com/library/qwen3-vl)
 
-```bash
-curl http://localhost:8000/health
-curl -X POST http://localhost:8000/ask \
-  -H 'Content-Type: application/json' \
-  -d '{"question":"Как добавить документы в индекс?"}'
-```
+Если модели не хватает видеопамяти, в `.env` можно указать `VISION_MODEL=qwen3-vl:4b`, затем выполнить `docker compose restart app`.
 
-Swagger UI: <http://localhost:8000/docs>
-
-Добавьте свои `.md` и `.txt` файлы в `data/docs/`, затем повторно запустите команду индексации. Для локальной разработки без Docker установите зависимости из `requirements.txt`, запустите Ollama на Linux и выполните `python -m app.ingest` и `uvicorn app.main:app --reload`.
-
-## API
-
-`POST /ask`
-
-```json
-{
-  "question": "Как добавить документы в индекс?",
-  "top_k": 4
-}
-```
-
-Ответ содержит сгенерированный текст и список найденных источников с оценками релевантности. Если подходящих фрагментов нет, сервис не вызывает LLM и сообщает, что данных недостаточно.
-
-`GET /health` возвращает статус сервиса и выбранные модели.
-
-## Настройки
-
-Скопируйте `.env.example` в `.env`. Доступны `OLLAMA_BASE_URL`, `CHAT_MODEL`, `EMBEDDING_MODEL`, `CHROMA_DIR`, `DOCS_DIR`, `TOP_K` и `MIN_RELEVANCE`. Значения по умолчанию подходят для Compose.
-
-## Структура
-
-```text
-app/
-  config.py       # конфигурация из окружения
-  ingest.py       # загрузка, чанкинг и индексация документов
-  main.py         # FastAPI endpoints и grounded RAG цепочка
-data/docs/        # документы для индексации
-```
-
-## Ограничения демо
-
-- Поддерживаются Markdown и обычный текст; PDF-парсер можно добавить отдельным loader.
-- Chroma хранится на локальном volume и подходит для одного экземпляра сервиса.
-- Доступ к API в демо не защищён аутентификацией; не публикуйте порт в интернет без защиты.
-- Качество ответа зависит от выбранных моделей, чанкинга и содержания документов.
-
-## Остановка
+Остановка:
 
 ```bash
 docker compose down
 ```
 
-Чтобы также удалить локальную модель и векторный индекс: `docker compose down -v`.
+Чтобы удалить также скачанную модель: `docker compose down -v`.
+
+## HTTP API
+
+`POST /transcribe` принимает один файл как `multipart/form-data`:
+
+```bash
+curl -X POST http://localhost:8000/transcribe \
+  -F "file=@my_notes.pdf"
+```
+
+Ответ содержит имя файла и распознанный текст отдельно по страницам. PDF ограничен 20 МБ и 20 страницами в одном запросе.
+
+`GET /health` показывает состояние API и название выбранной модели. Swagger UI: <http://localhost:8000/docs>.
+
+## Настройки
+
+Скопируйте `.env.example` в `.env`. `VISION_MODEL` задаёт модель Ollama, `OLLAMA_BASE_URL` — адрес Ollama, `MAX_PDF_PAGES` — ограничение числа страниц. По умолчанию приложение использует `qwen3-vl:8b`.
+
+## Структура проекта
+
+```text
+app/
+  main.py          # HTTP API и простая веб-страница
+  transcriber.py   # подготовка страниц и вызов модели
+static/index.html  # браузерный интерфейс
+tests/             # проверки преобразования страниц и метрики качества
+```
+
+## Проверка качества
+
+В `evaluation/` описан способ собрать небольшой набор проверочных страниц. Скрипт `evaluation/cer.py` сравнивает расшифровку модели с ручным эталоном по Character Error Rate (CER): чем ближе значение к 0, тем точнее распознавание. Не добавляйте личные конспекты в публичный репозиторий.
+
+Чтобы запустить автоматические проверки локально:
+
+```bash
+python -m pip install -r requirements-dev.txt
+pytest -q
+```
+
+## Готовый проект, который послужил ориентиром
+
+Для исследования использован открытый ноутбук [handwriting-ocr-vlm](https://github.com/Slavaxexe/handwriting-ocr-vlm): в нём Qwen2.5-VL распознаёт русские рукописные фото, а качество оценивается по CER. Автор сообщает о среднем CER около 0,173 на шести примерах. В репозитории не указана лицензия, поэтому его код и изображения сюда не копировались. Здесь создана самостоятельная, более простая обвязка вокруг Ollama и FastAPI.
+
+## Ограничения
+
+- Первая версия рассчитана на современные рукописные конспекты; исторический почерк отдельно не проверялся.
+- Таблицы, сложные схемы и мелкие подписи могут распознаваться неточно.
+- Локальная модель не отправляет страницы во внешний AI API, но сами веса модели нужно скачать через Ollama.
+- Это черновая расшифровка: перед использованием проверьте имена, числа, формулы и помеченные фрагменты.

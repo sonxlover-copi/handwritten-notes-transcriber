@@ -1,27 +1,25 @@
 services:
   ollama:
     image: ollama/ollama:latest
-    container_name: local-rag-ollama
+    container_name: notes-ollama
     volumes:
       - ollama_data:/root/.ollama
     ports:
       - "127.0.0.1:11434:11434"
     restart: unless-stopped
 
-  api:
+  app:
     build: .
-    container_name: local-rag-api
-    env_file:
-      - .env
+    container_name: notes-transcriber
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      VISION_MODEL: ${VISION_MODEL:-qwen3-vl:8b}
+      MAX_PDF_PAGES: ${MAX_PDF_PAGES:-20}
     ports:
       - "127.0.0.1:8000:8000"
-    volumes:
-      - ./data/docs:/app/data/docs:ro
-      - chroma_data:/app/data/chroma
     depends_on:
       - ollama
     restart: unless-stopped
 
 volumes:
   ollama_data:
-  chroma_data:

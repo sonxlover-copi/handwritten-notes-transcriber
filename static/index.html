@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Расшифровка конспектов</title>
+    <style>
+      :root { font-family: system-ui, sans-serif; color: #202124; background: #f5f6f8; }
+      body { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+      h1 { margin-bottom: 8px; }
+      .hint { color: #5f6368; line-height: 1.5; }
+      .panel { background: white; border: 1px solid #dfe1e5; border-radius: 12px; padding: 20px; margin-top: 20px; }
+      .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      button { border: 0; border-radius: 8px; padding: 10px 16px; color: white; background: #2457c5; cursor: pointer; }
+      button:disabled { opacity: .55; cursor: wait; }
+      textarea { box-sizing: border-box; width: 100%; min-height: 360px; margin-top: 16px; padding: 14px; border: 1px solid #dfe1e5; border-radius: 8px; font: 15px/1.55 ui-monospace, monospace; }
+      #status { min-height: 24px; margin-top: 12px; color: #5f6368; }
+      #status.error { color: #b3261e; }
+      #copy { background: #4b5563; }
+    </style>
+  </head>
+  <body>
+    <h1>Расшифровка конспектов</h1>
+    <p class="hint">Загрузите фото страницы или PDF. Файл обрабатывается локальной моделью; неразборчивые места отмечаются, а не угадываются.</p>
+
+    <section class="panel">
+      <form id="form" class="row">
+        <input id="file" name="file" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" required>
+        <button id="submit" type="submit">Расшифровать</button>
+        <button id="copy" type="button">Копировать текст</button>
+      </form>
+      <div id="status" role="status"></div>
+      <textarea id="result" placeholder="Здесь появится расшифровка. Проверьте её по оригиналу."></textarea>
+    </section>
+
+    <script>
+      const form = document.querySelector("#form");
+      const fileInput = document.querySelector("#file");
+      const submitButton = document.querySelector("#submit");
+      const result = document.querySelector("#result");
+      const status = document.querySelector("#status");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!fileInput.files.length) return;
+
+        submitButton.disabled = true;
+        status.classList.remove("error");
+        status.textContent = "Распознаю. Для PDF обработка займёт время на каждую страницу…";
+        result.value = "";
+
+        try {
+          const body = new FormData();
+          body.append("file", fileInput.files[0]);
+          const response = await fetch("/transcribe", { method: "POST", body });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.detail || "Не удалось обработать файл.");
+
+          result.value = data.pages
+            .map((page) => `## Страница ${page.page}\n\n${page.text}`)
+            .join("\n\n---\n\n");
+          status.textContent = `Готово: ${data.pages.length} стр. Проверьте текст по оригиналу.`;
+        } catch (error) {
+          status.classList.add("error");
+          status.textContent = error.message;
+        } finally {
+          submitButton.disabled = false;
+        }
+      });
+
+      document.querySelector("#copy").addEventListener("click", async () => {
+        if (!result.value) return;
+        await navigator.clipboard.writeText(result.value);
+        status.classList.remove("error");
+        status.textContent = "Текст скопирован.";
+      });
+    </script>
+  </body>
+</html>

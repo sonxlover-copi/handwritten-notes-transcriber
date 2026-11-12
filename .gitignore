@@ -3,4 +3,5 @@ __pycache__/
 *.py[cod]
 .venv/
 data/chroma/
+evaluation/private/
 *.log

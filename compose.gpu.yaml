@@ -1,0 +1,10 @@
+services:
+  ollama:
+    # Use this override when NVIDIA Container Toolkit is installed.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
