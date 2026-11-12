@@ -7,8 +7,7 @@ from urllib.parse import quote
 
 import fitz
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from ollama import ResponseError
 from pydantic import ValidationError
@@ -112,11 +111,21 @@ def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
     }
 
 
+def _make_latex_source(document: TranscribedDocument) -> str:
+    pages = [PageStructure(**page.model_dump(exclude={"page"})) for page in document.pages]
+    return make_latex(pages, fallback_title=Path(document.filename).stem)
+
+
+@app.post("/latex", response_class=PlainTextResponse)
+def get_latex_source(document: TranscribedDocument) -> PlainTextResponse:
+    """Return LaTeX for the reviewed version of the document."""
+    return PlainTextResponse(_make_latex_source(document), media_type="application/x-tex; charset=utf-8")
+
+
 @app.post("/pdf")
 def create_pdf(document: TranscribedDocument) -> StreamingResponse:
     """Compile the reviewed transcription to a PDF attachment."""
-    pages = [PageStructure(**page.model_dump(exclude={"page"})) for page in document.pages]
-    latex_source = make_latex(pages, fallback_title=Path(document.filename).stem)
+    latex_source = _make_latex_source(document)
 
     try:
         pdf_bytes = compile_pdf(latex_source)

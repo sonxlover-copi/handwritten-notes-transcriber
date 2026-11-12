@@ -3,122 +3,384 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Конспект в PDF</title>
+    <meta name="theme-color" content="#ffffff">
+    <title>Конспект — в документ</title>
     <style>
-      :root { font-family: system-ui, sans-serif; color: #202124; background: #f5f6f8; }
-      body { max-width: 900px; margin: 40px auto; padding: 0 20px; }
-      h1 { margin-bottom: 8px; }
-      .hint { color: #5f6368; line-height: 1.5; }
-      .panel { background: white; border: 1px solid #dfe1e5; border-radius: 12px; padding: 20px; margin-top: 20px; }
-      .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-      button { border: 0; border-radius: 8px; padding: 10px 16px; color: white; background: #2457c5; cursor: pointer; }
-      button:disabled { opacity: .55; cursor: wait; }
-      textarea { box-sizing: border-box; width: 100%; min-height: 360px; margin-top: 16px; padding: 14px; border: 1px solid #dfe1e5; border-radius: 8px; font: 15px/1.55 ui-monospace, monospace; }
-      #status { min-height: 24px; margin-top: 12px; color: #5f6368; }
-      #status.error { color: #b3261e; }
-      #copy { background: #4b5563; }
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #111;
+        background: #fff;
+        font-synthesis: none;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #fff; }
+      button, input, textarea, select { font: inherit; }
+      button { cursor: pointer; }
+      .topbar { border-bottom: 1px solid #e8e8e8; }
+      .topbar-inner { max-width: 1040px; min-height: 64px; margin: auto; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; }
+      .brand { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; letter-spacing: -.02em; }
+      .brand-mark { width: 25px; height: 25px; display: grid; place-items: center; border: 1.5px solid #111; border-radius: 6px; font-family: Georgia, serif; font-size: 17px; }
+      .local-label { color: #666; font-size: 12px; }
+      main { width: min(100% - 40px, 820px); margin: 58px auto 80px; }
+      .eyebrow { margin: 0 0 14px; color: #666; font-size: 12px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; }
+      h1 { max-width: 680px; margin: 0; font-size: clamp(34px, 6vw, 54px); line-height: 1.04; letter-spacing: -.055em; font-weight: 650; }
+      .intro { max-width: 590px; margin: 18px 0 34px; color: #5a5a5a; font-size: 16px; line-height: 1.6; }
+      .card { border: 1px solid #e5e5e5; border-radius: 14px; background: #fff; }
+      .upload-card { padding: 24px; }
+      .section-label { margin: 0 0 16px; color: #666; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+      .dropzone { min-height: 150px; padding: 24px; border: 1px dashed #bcbcbc; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; transition: background .15s, border-color .15s; }
+      .dropzone.dragging { border-color: #111; background: #f7f7f7; }
+      .upload-icon { width: 34px; height: 34px; margin-bottom: 11px; display: grid; place-items: center; border: 1px solid #ddd; border-radius: 9px; font-size: 18px; }
+      .drop-title { margin: 0; font-size: 14px; font-weight: 600; }
+      .drop-hint { margin: 6px 0 0; color: #777; font-size: 12px; }
+      .choose-button { margin-top: 15px; padding: 8px 12px; border: 1px solid #dedede; border-radius: 7px; background: #fff; color: #111; font-size: 12px; font-weight: 600; }
+      .choose-button:hover, .secondary:hover { background: #f5f5f5; }
+      #file { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
+      .file-row { min-height: 42px; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      #file-name { overflow: hidden; color: #555; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+      .primary { min-height: 42px; padding: 0 17px; border: 1px solid #111; border-radius: 8px; background: #111; color: #fff; font-size: 13px; font-weight: 600; transition: opacity .15s; }
+      .primary:hover { background: #333; }
+      .primary:disabled { cursor: wait; opacity: .45; }
+      .secondary { min-height: 38px; padding: 0 13px; border: 1px solid #dedede; border-radius: 8px; background: #fff; color: #111; font-size: 12px; font-weight: 600; }
+      .secondary:disabled { cursor: not-allowed; opacity: .4; }
+      #status { min-height: 24px; margin-top: 13px; color: #666; font-size: 13px; line-height: 1.5; }
+      #status.error { color: #111; font-weight: 650; }
+      #review { margin-top: 42px; }
+      .review-head { margin-bottom: 17px; display: flex; align-items: end; justify-content: space-between; gap: 18px; }
+      .review-head h2 { margin: 0; font-size: 23px; letter-spacing: -.035em; }
+      .review-head p { margin: 7px 0 0; color: #666; font-size: 13px; line-height: 1.5; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      .page-card { padding: 20px; margin-top: 12px; }
+      .page-heading { margin: 0 0 17px; display: flex; align-items: center; justify-content: space-between; color: #555; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+      .field { display: block; margin-top: 13px; }
+      .field-label { display: block; margin-bottom: 6px; color: #777; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+      .field input, .field textarea, .correction-row input, .correction-row select { width: 100%; border: 1px solid #e2e2e2; border-radius: 7px; background: #fff; color: #111; outline: none; }
+      .field input, .correction-row input, .correction-row select { min-height: 39px; padding: 9px 10px; }
+      .field textarea { min-height: 82px; padding: 10px; resize: vertical; line-height: 1.5; }
+      .field input:focus, .field textarea:focus, .correction-row input:focus, .correction-row select:focus { border-color: #777; box-shadow: 0 0 0 2px #eee; }
+      .block { padding-top: 4px; }
+      .block + .block { margin-top: 7px; }
+      .add-block { margin-top: 12px; }
+      .uncertain { margin-top: 16px; padding: 17px 18px; background: #f7f7f7; border: 1px solid #eee; border-radius: 10px; }
+      .uncertain h3 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+      .uncertain p { margin: 6px 0 12px; color: #666; font-size: 12px; line-height: 1.5; }
+      .correction-row { display: grid; grid-template-columns: 105px 1fr 1fr auto; gap: 8px; margin-top: 9px; }
+      .remove-correction { width: 38px; border: 1px solid #e2e2e2; border-radius: 7px; background: #fff; color: #555; }
+      .remove-correction:hover { background: #eee; }
+      .correction-actions { margin-top: 11px; }
+      .privacy-note { margin: 22px 0 0; color: #888; font-size: 11px; line-height: 1.5; }
+      [hidden] { display: none !important; }
+      @media (max-width: 660px) {
+        main { width: min(100% - 28px, 820px); margin-top: 38px; }
+        .topbar-inner { padding: 0 16px; }
+        .upload-card { padding: 16px; }
+        .review-head { align-items: start; flex-direction: column; }
+        .correction-row { grid-template-columns: 1fr; padding: 12px; border: 1px solid #e5e5e5; border-radius: 8px; }
+        .remove-correction { width: auto; min-height: 34px; }
+        .file-row { align-items: stretch; flex-direction: column; }
+        .primary { width: 100%; }
+      }
     </style>
   </head>
   <body>
-    <h1>Конспект в PDF</h1>
-    <p class="hint">Загрузите фото или скан. Приложение распознает текст, оформит заголовки, списки и формулы в LaTeX и соберёт PDF. Неразборчивые места будут помечены.</p>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand"><span class="brand-mark">N</span><span>Конспект → документ</span></div>
+        <span class="local-label">Локальная обработка</span>
+      </div>
+    </header>
 
-    <section class="panel">
-      <form id="form" class="row">
-        <input id="file" name="file" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" required>
-        <button id="submit" type="submit">Распознать и скачать PDF</button>
-        <button id="pdf" type="button" disabled>Скачать PDF ещё раз</button>
-        <button id="tex" type="button" disabled>Скачать LaTeX</button>
-      </form>
-      <div id="status" role="status"></div>
-      <textarea id="result" placeholder="Здесь появится структурированная расшифровка. Сверьте её с оригиналом."></textarea>
-    </section>
+    <main>
+      <p class="eyebrow">Расшифровка и оформление</p>
+      <h1>Из заметок — в аккуратный документ.</h1>
+      <p class="intro">Загрузите страницу. Проверьте распознанный текст, внесите сомнительные места и скачайте готовый PDF или исходник LaTeX.</p>
+
+      <section class="card upload-card" aria-labelledby="upload-title">
+        <p class="section-label" id="upload-title">01 · Загрузите конспект</p>
+        <div class="dropzone" id="dropzone">
+          <div class="upload-icon" aria-hidden="true">↑</div>
+          <p class="drop-title">Перетащите файл сюда</p>
+          <p class="drop-hint">Поддерживаются фото и PDF до 20 МБ</p>
+          <label class="choose-button" for="file">Выбрать файл</label>
+          <input id="file" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf">
+        </div>
+        <div class="file-row">
+          <span id="file-name">Файл не выбран</span>
+          <button class="primary" id="recognize" type="button" disabled>Распознать конспект</button>
+        </div>
+        <div id="status" role="status" aria-live="polite"></div>
+      </section>
+
+      <section id="review" hidden aria-labelledby="review-title">
+        <div class="review-head">
+          <div>
+            <p class="section-label">02 · Проверка и правки</p>
+            <h2 id="review-title">Проверьте текст</h2>
+            <p>Редактируйте поля прямо здесь. Неразборчивые места можно заменить ниже.</p>
+          </div>
+          <div class="actions">
+            <button class="secondary" id="download-tex" type="button">Скачать LaTeX</button>
+            <button class="primary" id="download-pdf" type="button">Собрать PDF</button>
+          </div>
+        </div>
+
+        <div id="pages"></div>
+
+        <section class="uncertain" aria-labelledby="uncertain-title">
+          <h3 id="uncertain-title">Сомнительные места</h3>
+          <p>Укажите страницу, фрагмент как он распознан и правильный вариант. Если нужного текста в распознавании нет, добавьте его в редактор страницы.</p>
+          <div id="corrections"></div>
+          <div class="correction-actions">
+            <button class="secondary" id="add-correction" type="button">+ Добавить исправление</button>
+          </div>
+        </section>
+        <p class="privacy-note">Страница и модель обрабатываются на этом компьютере. Перед использованием сверьте итоговый PDF с оригиналом.</p>
+      </section>
+    </main>
 
     <script>
-      const form = document.querySelector("#form");
       const fileInput = document.querySelector("#file");
-      const submitButton = document.querySelector("#submit");
-      const result = document.querySelector("#result");
+      const fileName = document.querySelector("#file-name");
+      const recognizeButton = document.querySelector("#recognize");
+      const downloadPdfButton = document.querySelector("#download-pdf");
+      const downloadTexButton = document.querySelector("#download-tex");
+      const review = document.querySelector("#review");
+      const pagesContainer = document.querySelector("#pages");
+      const correctionsContainer = document.querySelector("#corrections");
       const status = document.querySelector("#status");
-      const pdfButton = document.querySelector("#pdf");
-      const texButton = document.querySelector("#tex");
-      let transcribedDocument = null;
-      let latexSource = "";
+      const dropzone = document.querySelector("#dropzone");
+      let currentDocument = null;
 
-      async function downloadPdf() {
-        const response = await fetch("/pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(transcribedDocument),
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || "Не удалось собрать PDF.");
-        }
+      const blockLabels = {
+        heading: "Заголовок",
+        paragraph: "Текст",
+        list_item: "Пункт списка",
+        formula: "Формула LaTeX",
+      };
 
-        const url = URL.createObjectURL(await response.blob());
-        const link = document.createElement("a");
-        const baseName = transcribedDocument.filename.replace(/\.[^.]+$/, "") || "конспект";
-        link.href = url;
-        link.download = `${baseName}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        fileName.textContent = file ? `${file.name} · ${formatBytes(file.size)}` : "Файл не выбран";
+        recognizeButton.disabled = !file;
+        review.hidden = true;
+      });
+
+      function formatBytes(bytes) {
+        return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} КБ` : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
       }
 
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        if (!fileInput.files.length) return;
+      function setStatus(message, isError = false) {
+        status.textContent = message;
+        status.classList.toggle("error", isError);
+      }
 
-        submitButton.disabled = true;
-        status.classList.remove("error");
-        status.textContent = "Распознаю страницы и собираю документ…";
-        result.value = "";
-        pdfButton.disabled = true;
-        texButton.disabled = true;
-        transcribedDocument = null;
-        latexSource = "";
+      function makeField(labelText, value, onInput, multiline = false) {
+        const label = document.createElement("label");
+        label.className = "field";
+        const caption = document.createElement("span");
+        caption.className = "field-label";
+        caption.textContent = labelText;
+        const input = document.createElement(multiline ? "textarea" : "input");
+        if (!multiline) input.type = "text";
+        input.value = value || "";
+        input.addEventListener("input", () => onInput(input.value));
+        label.append(caption, input);
+        return label;
+      }
 
+      function renderPages() {
+        pagesContainer.replaceChildren();
+        currentDocument.pages.forEach((page, pageIndex) => {
+          const card = document.createElement("article");
+          card.className = "card page-card";
+          const header = document.createElement("div");
+          header.className = "page-heading";
+          header.textContent = `Страница ${page.page}`;
+          card.append(header);
+          card.append(makeField("Заголовок", page.title, (value) => { page.title = value || null; }));
+
+          page.metadata.forEach((item, metadataIndex) => {
+            card.append(makeField("Подпись / дата / группа", item, (value) => { page.metadata[metadataIndex] = value; }));
+          });
+
+          page.blocks.forEach((block, blockIndex) => {
+            card.append(makeField(
+              blockLabels[block.kind] || "Текст",
+              block.text,
+              (value) => { page.blocks[blockIndex].text = value; },
+              true,
+            ));
+          });
+
+          const addBlockButton = document.createElement("button");
+          addBlockButton.className = "secondary add-block";
+          addBlockButton.type = "button";
+          addBlockButton.textContent = "+ Добавить текст на страницу";
+          addBlockButton.addEventListener("click", () => {
+            page.blocks.push({ kind: "paragraph", text: "", level: 1 });
+            renderPages();
+          });
+          card.append(addBlockButton);
+          pagesContainer.append(card);
+        });
+      }
+
+      function addCorrectionRow() {
+        const row = document.createElement("div");
+        row.className = "correction-row";
+
+        const pageSelect = document.createElement("select");
+        pageSelect.setAttribute("aria-label", "Страница исправления");
+        currentDocument.pages.forEach((page) => {
+          const option = document.createElement("option");
+          option.value = page.page;
+          option.textContent = `Стр. ${page.page}`;
+          pageSelect.append(option);
+        });
+
+        const original = document.createElement("input");
+        original.placeholder = "Найти фрагмент в тексте";
+        original.setAttribute("aria-label", "Распознанный сомнительный фрагмент");
+        const replacement = document.createElement("input");
+        replacement.placeholder = "На что заменить";
+        replacement.setAttribute("aria-label", "Правильный текст фрагмента");
+        const remove = document.createElement("button");
+        remove.className = "remove-correction";
+        remove.type = "button";
+        remove.textContent = "×";
+        remove.setAttribute("aria-label", "Удалить исправление");
+        remove.addEventListener("click", () => row.remove());
+        row.append(pageSelect, original, replacement, remove);
+        correctionsContainer.append(row);
+      }
+
+      function applyCorrections() {
+        const documentCopy = structuredClone(currentDocument);
+        const rows = [...correctionsContainer.querySelectorAll(".correction-row")];
+        for (const row of rows) {
+          const pageNumber = Number(row.querySelector("select").value);
+          const original = row.querySelector("input[aria-label='Распознанный сомнительный фрагмент']").value.trim();
+          const replacement = row.querySelector("input[aria-label='Правильный текст фрагмента']").value.trim();
+          if (!original && !replacement) continue;
+          if (!original || !replacement) {
+            throw new Error("Заполните и исходный фрагмент, и его правильный вариант.");
+          }
+
+          const page = documentCopy.pages.find((item) => item.page === pageNumber);
+          const block = page?.blocks.find((item) => item.text.includes(original));
+          if (!block) {
+            throw new Error(`Не нашёл «${original}» на странице ${pageNumber}. Проверьте фрагмент или отредактируйте текст страницы напрямую.`);
+          }
+          block.text = block.text.replace(original, replacement);
+        }
+        return documentCopy;
+      }
+
+      async function parseError(response, fallback) {
         try {
-          const body = new FormData();
-          body.append("file", fileInput.files[0]);
-          const response = await fetch("/transcribe", { method: "POST", body });
           const data = await response.json();
-          if (!response.ok) throw new Error(data.detail || "Не удалось обработать файл.");
-
-          transcribedDocument = data.document;
-          latexSource = data.latex_source;
-          result.value = data.preview;
-          status.textContent = "Текст распознан. Компилирую LaTeX в PDF…";
-          await downloadPdf();
-          pdfButton.disabled = false;
-          texButton.disabled = false;
-          status.textContent = `Готово: ${transcribedDocument.pages.length} стр. PDF скачан; проверьте расшифровку по оригиналу.`;
-        } catch (error) {
-          status.classList.add("error");
-          status.textContent = error.message;
-        } finally {
-          submitButton.disabled = false;
+          return data.detail || fallback;
+        } catch {
+          return fallback;
         }
-      });
+      }
 
-      pdfButton.addEventListener("click", async () => {
-        try {
-          await downloadPdf();
-          status.classList.remove("error");
-          status.textContent = "PDF скачан повторно.";
-        } catch (error) {
-          status.classList.add("error");
-          status.textContent = error.message;
-        }
-      });
-
-      texButton.addEventListener("click", () => {
-        const url = URL.createObjectURL(new Blob([latexSource], { type: "application/x-tex" }));
+      function saveBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = "конспект.tex";
+        link.download = filename;
         link.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      recognizeButton.addEventListener("click", async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        recognizeButton.disabled = true;
+        review.hidden = true;
+        setStatus("Распознаю страницы и формирую структуру документа…");
+        try {
+          const body = new FormData();
+          body.append("file", file);
+          const response = await fetch("/transcribe", { method: "POST", body });
+          if (!response.ok) throw new Error(await parseError(response, "Не удалось распознать файл."));
+          const data = await response.json();
+          currentDocument = data.document;
+          correctionsContainer.replaceChildren();
+          renderPages();
+          review.hidden = false;
+          setStatus(`Готово: распознано страниц — ${currentDocument.pages.length}. Проверьте текст перед сборкой PDF.`);
+          review.scrollIntoView({ behavior: "smooth", block: "start" });
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          recognizeButton.disabled = false;
+        }
+      });
+
+      document.querySelector("#add-correction").addEventListener("click", () => {
+        if (currentDocument) addCorrectionRow();
+      });
+
+      downloadPdfButton.addEventListener("click", async () => {
+        if (!currentDocument) return;
+        downloadPdfButton.disabled = true;
+        setStatus("Собираю PDF…");
+        try {
+          const reviewedDocument = applyCorrections();
+          const response = await fetch("/pdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(reviewedDocument),
+          });
+          if (!response.ok) throw new Error(await parseError(response, "Не удалось собрать PDF."));
+          const filename = reviewedDocument.filename.replace(/\.[^.]+$/, "") || "конспект";
+          saveBlob(await response.blob(), `${filename}.pdf`);
+          setStatus("PDF готов. Проверьте формулы и текст по оригиналу.");
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          downloadPdfButton.disabled = false;
+        }
+      });
+
+      downloadTexButton.addEventListener("click", async () => {
+        if (!currentDocument) return;
+        downloadTexButton.disabled = true;
+        try {
+          const reviewedDocument = applyCorrections();
+          const response = await fetch("/latex", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(reviewedDocument),
+          });
+          if (!response.ok) throw new Error(await parseError(response, "Не удалось подготовить LaTeX."));
+          saveBlob(await response.blob(), "конспект.tex");
+          setStatus("Исходник LaTeX скачан.");
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          downloadTexButton.disabled = false;
+        }
+      });
+
+      dropzone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        dropzone.classList.add("dragging");
+      });
+      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragging"));
+      dropzone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("dragging");
+        const file = event.dataTransfer.files[0];
+        if (!file) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files = transfer.files;
+        fileInput.dispatchEvent(new Event("change"));
       });
     </script>
   </body>
