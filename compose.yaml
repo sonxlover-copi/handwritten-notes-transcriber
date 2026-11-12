@@ -15,11 +15,15 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       VISION_MODEL: ${VISION_MODEL:-qwen3-vl:8b}
       MAX_PDF_PAGES: ${MAX_PDF_PAGES:-20}
+      TECTONIC_UNTRUSTED_MODE: "1"
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
       - ollama
+    volumes:
+      - tectonic_cache:/root/.cache/tectonic
     restart: unless-stopped
 
 volumes:
   ollama_data:
+  tectonic_cache:

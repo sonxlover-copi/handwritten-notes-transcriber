@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Расшифровка конспектов</title>
+    <title>Конспект в PDF</title>
     <style>
       :root { font-family: system-ui, sans-serif; color: #202124; background: #f5f6f8; }
       body { max-width: 900px; margin: 40px auto; padding: 0 20px; }
@@ -20,17 +20,18 @@
     </style>
   </head>
   <body>
-    <h1>Расшифровка конспектов</h1>
-    <p class="hint">Загрузите фото страницы или PDF. Файл обрабатывается локальной моделью; неразборчивые места отмечаются, а не угадываются.</p>
+    <h1>Конспект в PDF</h1>
+    <p class="hint">Загрузите фото или скан. Приложение распознает текст, оформит заголовки, списки и формулы в LaTeX и соберёт PDF. Неразборчивые места будут помечены.</p>
 
     <section class="panel">
       <form id="form" class="row">
         <input id="file" name="file" type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" required>
-        <button id="submit" type="submit">Расшифровать</button>
-        <button id="copy" type="button">Копировать текст</button>
+        <button id="submit" type="submit">Распознать и скачать PDF</button>
+        <button id="pdf" type="button" disabled>Скачать PDF ещё раз</button>
+        <button id="tex" type="button" disabled>Скачать LaTeX</button>
       </form>
       <div id="status" role="status"></div>
-      <textarea id="result" placeholder="Здесь появится расшифровка. Проверьте её по оригиналу."></textarea>
+      <textarea id="result" placeholder="Здесь появится структурированная расшифровка. Сверьте её с оригиналом."></textarea>
     </section>
 
     <script>
@@ -39,6 +40,30 @@
       const submitButton = document.querySelector("#submit");
       const result = document.querySelector("#result");
       const status = document.querySelector("#status");
+      const pdfButton = document.querySelector("#pdf");
+      const texButton = document.querySelector("#tex");
+      let transcribedDocument = null;
+      let latexSource = "";
+
+      async function downloadPdf() {
+        const response = await fetch("/pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(transcribedDocument),
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || "Не удалось собрать PDF.");
+        }
+
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement("a");
+        const baseName = transcribedDocument.filename.replace(/\.[^.]+$/, "") || "конспект";
+        link.href = url;
+        link.download = `${baseName}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -46,8 +71,12 @@
 
         submitButton.disabled = true;
         status.classList.remove("error");
-        status.textContent = "Распознаю. Для PDF обработка займёт время на каждую страницу…";
+        status.textContent = "Распознаю страницы и собираю документ…";
         result.value = "";
+        pdfButton.disabled = true;
+        texButton.disabled = true;
+        transcribedDocument = null;
+        latexSource = "";
 
         try {
           const body = new FormData();
@@ -56,10 +85,14 @@
           const data = await response.json();
           if (!response.ok) throw new Error(data.detail || "Не удалось обработать файл.");
 
-          result.value = data.pages
-            .map((page) => `## Страница ${page.page}\n\n${page.text}`)
-            .join("\n\n---\n\n");
-          status.textContent = `Готово: ${data.pages.length} стр. Проверьте текст по оригиналу.`;
+          transcribedDocument = data.document;
+          latexSource = data.latex_source;
+          result.value = data.preview;
+          status.textContent = "Текст распознан. Компилирую LaTeX в PDF…";
+          await downloadPdf();
+          pdfButton.disabled = false;
+          texButton.disabled = false;
+          status.textContent = `Готово: ${transcribedDocument.pages.length} стр. PDF скачан; проверьте расшифровку по оригиналу.`;
         } catch (error) {
           status.classList.add("error");
           status.textContent = error.message;
@@ -68,11 +101,24 @@
         }
       });
 
-      document.querySelector("#copy").addEventListener("click", async () => {
-        if (!result.value) return;
-        await navigator.clipboard.writeText(result.value);
-        status.classList.remove("error");
-        status.textContent = "Текст скопирован.";
+      pdfButton.addEventListener("click", async () => {
+        try {
+          await downloadPdf();
+          status.classList.remove("error");
+          status.textContent = "PDF скачан повторно.";
+        } catch (error) {
+          status.classList.add("error");
+          status.textContent = error.message;
+        }
+      });
+
+      texButton.addEventListener("click", () => {
+        const url = URL.createObjectURL(new Blob([latexSource], { type: "application/x-tex" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "конспект.tex";
+        link.click();
+        URL.revokeObjectURL(url);
       });
     </script>
   </body>

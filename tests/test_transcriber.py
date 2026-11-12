@@ -6,7 +6,7 @@ from PIL import Image
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.transcriber import NotePage, image_pages, pdf_pages
+from app.transcriber import ContentBlock, NotePage, PageStructure, image_pages, pdf_pages
 
 
 def test_image_pages_normalizes_an_image_to_jpeg() -> None:
@@ -38,7 +38,9 @@ def test_transcribe_endpoint_returns_page_text(monkeypatch) -> None:
     """The API responds correctly without needing to start the local model."""
     monkeypatch.setattr(
         "app.main.transcribe_page",
-        lambda page: f"Текст страницы {page.number}",
+        lambda page: PageStructure(
+            blocks=[ContentBlock(kind="paragraph", text=f"Текст страницы {page.number}")]
+        ),
     )
     image = Image.new("RGB", (40, 30), color="white")
     buffer = BytesIO()
@@ -50,7 +52,14 @@ def test_transcribe_endpoint_returns_page_text(monkeypatch) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["pages"] == [{"page": 1, "text": "Текст страницы 1"}]
+    assert response.json()["document"]["pages"] == [
+        {
+            "page": 1,
+            "title": None,
+            "metadata": [],
+            "blocks": [{"kind": "paragraph", "text": "Текст страницы 1", "level": 1}],
+        }
+    ]
 
 
 def test_transcribe_page_calls_ollama_with_image(monkeypatch) -> None:
@@ -61,12 +70,16 @@ def test_transcribe_page_calls_ollama_with_image(monkeypatch) -> None:
 
     def fake_chat(**kwargs):
         captured.update(kwargs)
-        return SimpleNamespace(message=SimpleNamespace(content="Пример текста"))
+        return SimpleNamespace(
+            message=SimpleNamespace(
+                content='{"title":null,"metadata":[],"blocks":[{"kind":"paragraph","text":"Пример текста","level":1}]}'
+            )
+        )
 
     monkeypatch.setattr(transcriber.ollama, "chat", fake_chat)
     result = transcriber.transcribe_page(NotePage(number=1, image=b"jpeg"))
 
-    assert result == "Пример текста"
+    assert result.blocks[0].text == "Пример текста"
     assert captured["model"] == transcriber.VISION_MODEL
     assert captured["messages"][0]["images"] == [b"jpeg"]
-    assert "Дословно перепиши" in captured["messages"][0]["content"]
+    assert "Дословно расшифруй" in captured["messages"][0]["content"]

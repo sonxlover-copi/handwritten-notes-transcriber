@@ -1,19 +1,26 @@
 """Small FastAPI application for uploading and transcribing notes."""
 
 from pathlib import Path
+from io import BytesIO
+import subprocess
+from urllib.parse import quote
 
 import fitz
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from ollama import ResponseError
+from pydantic import ValidationError
 
 from app.config import MAX_PDF_PAGES, MAX_UPLOAD_BYTES, VISION_MODEL
-from app.transcriber import NotePage, image_pages, pdf_pages, transcribe_page
+from app.documents import DocumentPage, TranscribedDocument
+from app.latex import compile_pdf, make_latex
+from app.transcriber import NotePage, PageStructure, image_pages, pdf_pages, transcribe_page
 
 app = FastAPI(
-    title="Расшифровка конспектов",
-    description="Локальное распознавание рукописных заметок с помощью Ollama.",
+    title="Расшифровка конспектов в PDF",
+    description="Локально распознаёт страницу, создаёт структурированный LaTeX и PDF.",
     version="1.0.0",
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -55,7 +62,7 @@ def _get_pages(filename: str, file_bytes: bytes) -> list[NotePage]:
 
 @app.post("/transcribe")
 def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
-    """Transcribe each page and return text with page numbers."""
+    """Extract structured page content and prepare its LaTeX source."""
     filename = file.filename or "uploaded-file"
     file_bytes = file.file.read(MAX_UPLOAD_BYTES + 1)
 
@@ -66,14 +73,19 @@ def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
     if not pages:
         raise HTTPException(status_code=400, detail="В файле не найдено страниц.")
 
-    results = []
+    results: list[DocumentPage] = []
     for page in pages:
         try:
-            text = transcribe_page(page)
+            structure = transcribe_page(page)
         except ResponseError as exc:
             raise HTTPException(
                 status_code=503,
                 detail=f"Ollama не смог обработать страницу. Проверьте, что загружена модель {VISION_MODEL}.",
+            ) from exc
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Модель вернула структуру, которую приложение не смогло разобрать.",
             ) from exc
         except Exception as exc:
             raise HTTPException(
@@ -81,6 +93,43 @@ def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
                 detail="Нет соединения с Ollama. Проверьте, что контейнер Ollama запущен.",
             ) from exc
 
-        results.append({"page": page.number, "text": text})
+        results.append(DocumentPage(page=page.number, **structure.model_dump()))
 
-    return {"filename": filename, "pages": results}
+    document = TranscribedDocument(filename=filename, pages=results)
+    page_structures = [PageStructure(**page.model_dump(exclude={"page"})) for page in results]
+    latex_source = make_latex(page_structures, fallback_title=Path(filename).stem)
+    preview = "\n\n".join(
+        "\n".join(
+            ("# " + page.title if page.title else "", *page.metadata,
+                *[block.text for block in page.blocks])
+        ).strip()
+        for page in page_structures
+    )
+    return {
+        "document": document.model_dump(),
+        "preview": preview,
+        "latex_source": latex_source,
+    }
+
+
+@app.post("/pdf")
+def create_pdf(document: TranscribedDocument) -> StreamingResponse:
+    """Compile the reviewed transcription to a PDF attachment."""
+    pages = [PageStructure(**page.model_dump(exclude={"page"})) for page in document.pages]
+    latex_source = make_latex(pages, fallback_title=Path(document.filename).stem)
+
+    try:
+        pdf_bytes = compile_pdf(latex_source)
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(status_code=503, detail="Не удалось собрать PDF. Проверьте LaTeX-компилятор.") from exc
+
+    filename = Path(document.filename).stem or "notes"
+    ascii_filename = "notes.pdf"
+    encoded_filename = quote(f"{filename}.pdf")
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{encoded_filename}",
+        },
+    )
